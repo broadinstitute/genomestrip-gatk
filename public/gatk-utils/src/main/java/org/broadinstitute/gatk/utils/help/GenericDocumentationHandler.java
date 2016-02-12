@@ -190,7 +190,6 @@ public abstract class GenericDocumentationHandler extends DocumentedGATKFeatureH
                         argBindings.put("maxValue", "NA");
                         argBindings.put("minRecValue", "NA");
                         argBindings.put("maxRecValue", "NA");
-                        argBindings.put("defaultValue", "NA");
                     }
                     // Finalize argument bindings
                     args.get(kind).add(argBindings);
