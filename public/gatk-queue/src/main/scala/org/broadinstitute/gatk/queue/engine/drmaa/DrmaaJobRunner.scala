@@ -26,6 +26,7 @@
 package org.broadinstitute.gatk.queue.engine.drmaa
 
 import org.broadinstitute.gatk.queue.QException
+import org.broadinstitute.gatk.queue.TryLaterException
 import org.broadinstitute.gatk.queue.util.{Logging,Retry}
 import org.broadinstitute.gatk.queue.function.CommandLineFunction
 import org.broadinstitute.gatk.queue.engine.{RunnerStatus, CommandLineJobRunner}
@@ -86,6 +87,7 @@ class DrmaaJobRunner(val session: Session, val function: CommandLineFunction) ex
           try {
             jobId = session.runJob(drmaaJob)
           } catch {
+            case _: org.ggf.drmaa.TryLaterException => throw new TryLaterException(1)
             case de: DrmaaException => throw new QException("Unable to submit job: " + de.getLocalizedMessage)
           }
         }, 1, 5, 10)
