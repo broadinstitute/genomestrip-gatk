@@ -25,6 +25,7 @@
 
 package org.broadinstitute.gatk.queue.util
 
+import org.broadinstitute.gatk.queue.TryLaterException
 import org.broadinstitute.gatk.queue.util.TextFormatUtils._
 
 /**
@@ -49,7 +50,11 @@ object Retry extends Logging {
         result = f()
         success = true
       } catch {
-        case e: Exception=> {
+        case e: TryLaterException => {
+          logger.debug("Caught TryLaterException. Will try again after %s min...".format(e.waitTime))
+          Thread.sleep((e.waitTime * 1000 * 60).toLong)
+	}
+        case e: Exception => {
           count += 1
           if (count < tries) {
             val minutes = wait(count-1)
