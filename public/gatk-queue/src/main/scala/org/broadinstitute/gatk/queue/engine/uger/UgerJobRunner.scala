@@ -33,62 +33,12 @@ import org.ggf.drmaa.Session
 /**
  * Runs jobs on a UGER compute cluster.
  */
-class UgerJobRunner(session: Session, function: CommandLineFunction) extends DrmaaJobRunner(session, function) with Logging {
-  // UGER disallows certain characters from being in job names.
-  // This replaces all illegal characters with underscores
-  protected override val jobNameFilter = """[\s/:,@\\*?]"""
-  protected override val minRunnerPriority = -1023
-  protected override val maxRunnerPriority = 0
+class UgerJobRunner(session: Session, function: CommandLineFunction) extends GridEngineJobRunner(session, function) with Logging {
 
   override protected def functionNativeSpec = {
-    // Force the remote environment to inherit local environment settings
-    var nativeSpec: String = "-V -clear"
+    // Force the UGER server defaults to be cleared
+    var nativeSpec: String = " -clear"
 
-    // If a project name is set specify the project name
-    if (function.jobProject != null)
-      nativeSpec += " -P " + function.jobProject
-
-    // If the job queue is set specify the job queue
-    if (function.jobQueue != null)
-      nativeSpec += " -q " + function.jobQueue
-
-    // If the resident set size is requested pass on the memory request
-    // mem_free is the standard, but may also be virtual_free or even not available
-    if (function.qSettings.residentRequestParameter != null && function.residentRequest.isDefined)
-      nativeSpec += " -l %s=%dM".format(function.qSettings.residentRequestParameter, function.residentRequest.map(_ * 1024).get.ceil.toInt)
-
-    // If the resident set size limit is defined specify the memory limit
-    if (function.residentLimit.isDefined) {
-      var memoryLimitParameter : String = "h_rss"
-      if (function.qSettings.useBroadClusterSettings) {
-        memoryLimitParameter = "h_vmem"
-      }
-
-      nativeSpec += " -l %s=%dM".format(memoryLimitParameter, function.residentLimit.map(_ * 1024).get.ceil.toInt)
-    }
-
-    // If more than 1 core is requested, set the proper request
-    // if we aren't being jerks and just stealing cores (previous behavior)
-    if ( function.nCoresRequest.getOrElse(1) > 1 ) {
-      if ( function.qSettings.dontRequestMultipleCores )
-        logger.warn("Sending multicore job %s to farm without requesting appropriate number of cores (%d)".format(
-          function.shortDescription, function.nCoresRequest.get))
-      else
-        nativeSpec += " -pe %s %d".format(function.qSettings.parallelEnvironmentName, function.nCoresRequest.get)
-    }
-
-    // Pass on any job resource requests
-    nativeSpec += function.jobResourceRequests.map(" -l " + _).mkString
-
-    // Pass on any job environment names
-    nativeSpec += function.jobEnvironmentNames.map(" -pe " + _).mkString
-
-    // If the priority is set specify the priority
-    val priority = functionPriority
-    if (priority.isDefined)
-      nativeSpec += " -p " + priority.get
-
-    logger.info("Native spec is: %s".format(nativeSpec))
     (nativeSpec + " " + super.functionNativeSpec).trim()
   }
 }
