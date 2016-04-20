@@ -280,11 +280,14 @@ class QGraph extends Logging {
   }
 
   private def getReadyJobs: Set[FunctionEdge] = {
-    jobGraph.edgeSet.filter{
+    logger.debug("getReadyJobs start")
+    val result = jobGraph.edgeSet.filter{
       case f: FunctionEdge =>
         this.previousFunctions(f).forall(_.status == RunnerStatus.DONE) && f.status == RunnerStatus.PENDING
       case _ => false
     }.toSet.asInstanceOf[Set[FunctionEdge]]
+    logger.debug("getReadyJobs done: result = " + result.size)
+    result
   }
 
   /**
@@ -424,12 +427,12 @@ class QGraph extends Logging {
       var readyJobs = TreeSet.empty[FunctionEdge](functionOrdering)
       readyJobs ++= getReadyJobs
       runningJobs = Set.empty[FunctionEdge]
-      var lastRunningCheck = System.currentTimeMillis
       var logNextStatusCounts = true
       var startedJobsToEmail = Set.empty[FunctionEdge]
 
       while (running && readyJobs.size + runningJobs.size > 0) {
 
+        var lastRunningCheck = System.currentTimeMillis
         var startedJobs = Set.empty[FunctionEdge]
         var doneJobs = Set.empty[FunctionEdge]
         var failedJobs = Set.empty[FunctionEdge]
@@ -483,7 +486,6 @@ class QGraph extends Logging {
           }
         }
 
-        lastRunningCheck = System.currentTimeMillis
         updateStatus()
 
         runningJobs.foreach(edge => edge.status match {
@@ -539,7 +541,7 @@ class QGraph extends Logging {
   }
 
   private def readyRunningCheck(lastRunningCheck: Long) =
-    lastRunningCheck > 0 && nextRunningCheck(lastRunningCheck) <= 0
+    lastRunningCheck > 0 && runningJobs.size > 0 && nextRunningCheck(lastRunningCheck) <= 0
 
   private def nextRunningCheck(lastRunningCheck: Long) =
     ((30 * 1000L) - (System.currentTimeMillis - lastRunningCheck))
