@@ -51,8 +51,7 @@ object Retry extends Logging {
         success = true
       } catch {
         case e: TryLaterException => {
-          logger.debug("Caught TryLaterException. Will try again after %s min...".format(e.waitTime))
-          Thread.sleep((e.waitTime * 1000 * 60).toLong)
+          throw e
 	}
         case e: Exception => {
           count += 1
