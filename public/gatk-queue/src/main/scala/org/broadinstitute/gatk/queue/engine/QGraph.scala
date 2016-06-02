@@ -33,6 +33,7 @@ import org.jgrapht.EdgeFactory
 import org.jgrapht.ext.DOTExporter
 import org.jgrapht.event.{TraversalListenerAdapter, EdgeTraversalEvent}
 import org.broadinstitute.gatk.queue.QException
+import org.broadinstitute.gatk.queue.TryLaterException
 import org.broadinstitute.gatk.queue.function.{InProcessFunction, CommandLineFunction, QFunction}
 import org.apache.commons.lang.StringUtils
 import org.broadinstitute.gatk.queue.util._
@@ -450,14 +451,23 @@ class QGraph extends Logging {
             canRunMoreConcurrentJobs
         }
 
-        while (startJobs) {
+        var tryLater = false
+        while (startJobs && !tryLater) {
           val edge = readyJobs.head
           edge.runner = newRunner(edge.function)
-          edge.start()
-          messengers.foreach(_.started(jobShortName(edge.function)))
-          startedJobs += edge
-          readyJobs -= edge
-          logNextStatusCounts = true
+          try {
+            edge.start()
+            messengers.foreach(_.started(jobShortName(edge.function)))
+            startedJobs += edge
+            readyJobs -= edge
+            logNextStatusCounts = true
+	  } catch {
+            case e: TryLaterException => {
+              logger.debug("Caught TryLaterException. Will try again later...")
+              tryLater = true
+            }
+	    case e : Throwable => throw e
+          }
         }
 
         runningJobs ++= startedJobs
