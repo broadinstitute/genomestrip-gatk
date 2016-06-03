@@ -25,6 +25,7 @@
 
 package org.broadinstitute.gatk.queue.engine
 
+import org.broadinstitute.gatk.queue.TryLaterException
 import org.broadinstitute.gatk.queue.function.QFunction
 import java.io.{StringWriter, PrintWriter}
 import org.broadinstitute.gatk.queue.util.Logging
@@ -83,6 +84,14 @@ class FunctionEdge(val function: QFunction, val inputs: QNode, val outputs: QNod
       runner.init()
       runner.start()
     } catch {
+      case e: TryLaterException => {
+        try {
+          runner.cleanup()
+        } catch {
+          case _: Throwable => /* ignore errors in the exception handler */
+        }
+	throw e
+      }
       case e: Throwable =>
         currentStatus = RunnerStatus.FAILED
         try {
