@@ -41,4 +41,6 @@ class UgerJobRunner(session: Session, function: CommandLineFunction) extends Gri
 
     (nativeSpec + " " + super.functionNativeSpec).trim()
   }
+
+  override protected def memoryLimitParameter = "m_mem_free"
 }

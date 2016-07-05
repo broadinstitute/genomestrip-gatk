@@ -59,11 +59,6 @@ class GridEngineJobRunner(session: Session, function: CommandLineFunction) exten
 
     // If the resident set size limit is defined specify the memory limit
     if (function.residentLimit.isDefined) {
-      var memoryLimitParameter : String = "h_rss"
-      if (function.qSettings.useBroadClusterSettings) {
-        memoryLimitParameter = "h_vmem"
-      }
-
       nativeSpec += " -l %s=%dM".format(memoryLimitParameter, function.residentLimit.map(_ * 1024).get.ceil.toInt)
     }
 
@@ -90,5 +85,13 @@ class GridEngineJobRunner(session: Session, function: CommandLineFunction) exten
 
     logger.info("Native spec is: %s".format(nativeSpec))
     (nativeSpec + " " + super.functionNativeSpec).trim()
+  }
+
+  protected def memoryLimitParameter = {
+    var param: String = "h_rss"
+    if (function.qSettings.useBroadClusterSettings) {
+      param = "h_vmem"
+    }
+    param
   }
 }
