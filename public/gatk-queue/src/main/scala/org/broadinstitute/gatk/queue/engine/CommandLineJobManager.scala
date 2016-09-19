@@ -32,4 +32,6 @@ import org.broadinstitute.gatk.queue.function.CommandLineFunction
  */
 trait CommandLineJobManager[TRunner <: CommandLineJobRunner] extends JobManager[CommandLineFunction, TRunner] {
   def functionType = classOf[CommandLineFunction]
+
+  def supportsJobArrays = false
 }

@@ -39,7 +39,7 @@ trait CommandLineJobRunner extends JobRunner[CommandLineFunction] with Logging {
   def jobIdString: String = null
 
   /** A generated exec shell script. */
-  protected var jobScript: File = _
+  var jobScript: File = _
 
   /** Which directory to use for the job status files. */
   protected def jobStatusDir = function.jobTempDir
@@ -71,6 +71,16 @@ trait CommandLineJobRunner extends JobRunner[CommandLineFunction] with Logging {
 
   override def init() {
     super.init()
+
+    this match {
+      case jobArrayRunner: JobArrayRunner => jobArrayRunner.createScriptCallsFile(jobStatusDir)
+      case _ =>
+    }
+
+    this.jobScript = createJobScript()
+  }
+
+  protected def createJobScript() = {
     val exec = new StringBuilder
     
     var dirs = Set.empty[File]
@@ -81,9 +91,13 @@ trait CommandLineJobRunner extends JobRunner[CommandLineFunction] with Logging {
       exec.append(dirs.mkString("cd '", "' && cd '", "'"))
       exec.append(" && cd '%s' && \\%n".format(function.commandDirectory))
     }
-    exec.append(function.commandLine)
+    exec.append(getJobScriptBody())
 
-    this.jobScript = IOUtils.writeTempFile(exec.toString(), ".exec", "", jobStatusDir)
+    IOUtils.writeTempFile(exec.toString(), ".exec", "", jobStatusDir)
+  }
+
+  protected def getJobScriptBody() = {
+    function.commandLine
   }
 
   protected def updateStatus(updatedStatus: RunnerStatus.Value) {
@@ -103,5 +117,10 @@ trait CommandLineJobRunner extends JobRunner[CommandLineFunction] with Logging {
   override def cleanup() {
     super.cleanup()
     IOUtils.tryDelete(jobScript)
+
+    this match {
+      case jobArrayRunner: JobArrayRunner => jobArrayRunner.deleteScriptCallsFile()
+      case _ =>
+    }
   }
 }

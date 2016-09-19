@@ -34,7 +34,7 @@ import org.jgrapht.ext.DOTExporter
 import org.jgrapht.event.{TraversalListenerAdapter, EdgeTraversalEvent}
 import org.broadinstitute.gatk.queue.QException
 import org.broadinstitute.gatk.queue.TryLaterException
-import org.broadinstitute.gatk.queue.function.{InProcessFunction, CommandLineFunction, QFunction}
+import org.broadinstitute.gatk.queue.function.{InProcessFunction, CommandLineFunction, QFunction, JobArrayFunction}
 import org.apache.commons.lang.StringUtils
 import org.broadinstitute.gatk.queue.util._
 import collection.immutable.{TreeSet, TreeMap}
@@ -66,6 +66,14 @@ class QGraph extends Logging {
   private val runningLock = new Object
   private var runningJobs = Set.empty[FunctionEdge]
   private var cleanupJobs = Set.empty[FunctionEdge]
+
+  // A map of job array functions by jobArrayName
+  private var jobArrayMap = Map.empty[String, FunctionEdge]
+  // A map of job array function counts by jobArrayName
+  private var jobArrayCountMap = collection.mutable.Map[String, Int]().withDefaultValue(0)
+
+  // Number of jobs being run by commandLineManager
+  var numConcurrentJobs = 0
 
   private val nl = "%n".format()
 
@@ -282,11 +290,45 @@ class QGraph extends Logging {
 
   private def getReadyJobs: Set[FunctionEdge] = {
     logger.debug("getReadyJobs start")
-    val result = jobGraph.edgeSet.filter{
-      case f: FunctionEdge =>
-        this.previousFunctions(f).forall(_.status == RunnerStatus.DONE) && f.status == RunnerStatus.PENDING
+
+    // A map of ready job array function counts by jobArrayName
+    var readyJobCountMap = collection.mutable.Map[String, Int]().withDefaultValue(0)
+
+    val edges = jobGraph.edgeSet.filter(_ match {
+      case edge: FunctionEdge =>
+        val isReady = this.previousFunctions(edge).forall(_.status == RunnerStatus.DONE) && edge.status == RunnerStatus.PENDING
+
+        if (isReady) {
+          countIfArrayJob(edge.function, readyJobCountMap)
+        }
+        isReady
+
       case _ => false
-    }.toSet.asInstanceOf[Set[FunctionEdge]]
+    }).toSet.asInstanceOf[Set[FunctionEdge]]
+
+    // Contains jobArrayName(s) for which some but not all functions are ready
+    var incompleteJobArrays = Set.empty[String]
+    if (readyJobCountMap.size > 0) {
+      readyJobCountMap.foreach{ case(jobArrayName, count) =>
+        val jobArrayCount = jobArrayCountMap.get(jobArrayName) match {
+          case Some(aCount) => aCount
+          case None => throw new QException("Can't find the job array count for jobArrayName " + jobArrayName)
+        }
+        if (count < jobArrayCount) incompleteJobArrays += jobArrayName
+      }
+    }
+
+    // Filter out all the functions that belong to the incomplete jobArray groups
+    var result = if (incompleteJobArrays.size == 0)
+      edges
+    else {
+      edges.filter(_.function match {
+        case cmd: CommandLineFunction =>
+          cmd.jobArrayName == null || !incompleteJobArrays.contains(cmd.jobArrayName)
+        case _ => true
+      })
+    }
+
     logger.debug("getReadyJobs done: result = " + result.size)
     result
   }
@@ -438,11 +480,11 @@ class QGraph extends Logging {
         var doneJobs = Set.empty[FunctionEdge]
         var failedJobs = Set.empty[FunctionEdge]
 
-        def startJobs: Boolean = {
+        def canStartJobs: Boolean = {
 
           def canRunMoreConcurrentJobs: Boolean =
-            if(settings.maximumNumberOfConcurrentJobs.isDefined)
-              runningJobs.size + startedJobs.size < settings.maximumNumberOfConcurrentJobs.get
+            if (settings.maximumNumberOfConcurrentJobs.isDefined)
+              numConcurrentJobs < settings.maximumNumberOfConcurrentJobs.get
             else
               true
 
@@ -452,22 +494,22 @@ class QGraph extends Logging {
         }
 
         var tryLater = false
-        while (startJobs && !tryLater) {
-          val edge = readyJobs.head
-          edge.runner = newRunner(edge.function)
-          try {
-            edge.start()
-            messengers.foreach(_.started(jobShortName(edge.function)))
-            startedJobs += edge
-            readyJobs -= edge
-            logNextStatusCounts = true
-	  } catch {
-            case e: TryLaterException => {
-              logger.debug("Caught TryLaterException. Will try again later...")
-              tryLater = true
-            }
-	    case e : Throwable => throw e
+
+        try {
+          while (canStartJobs && !tryLater) {
+            startJobs(readyJobs).foreach(edge => {
+              messengers.foreach(_.started(jobShortName(edge.function)))
+              startedJobs += edge
+              readyJobs -= edge
+              logNextStatusCounts = true
+            })
           }
+        } catch {
+          case e: TryLaterException => {
+            logger.debug("Caught TryLaterException. Will try again later...")
+            tryLater = true
+          }
+          case e : Throwable => throw e
         }
 
         runningJobs ++= startedJobs
@@ -486,7 +528,7 @@ class QGraph extends Logging {
           startedJobsToEmail = Set.empty[FunctionEdge]
         }
 
-        if (readyJobs.size == 0 && runningJobs.size > 0) {
+        if ((readyJobs.size == 0 || !canStartJobs) && runningJobs.size > 0) {
           runningLock.synchronized {
             if (running) {
               val timeout = nextRunningCheck(lastRunningCheck)
@@ -501,10 +543,18 @@ class QGraph extends Logging {
         runningJobs.foreach(edge => edge.status match {
           case RunnerStatus.DONE => {
             doneJobs += edge
+            discountIfArrayJob(edge.function, jobArrayCountMap)
+            if (!isArrayJob(edge.function) || settings.countAllArrayJobs)
+              numConcurrentJobs -= 1
+
             messengers.foreach(_.done(jobShortName(edge.function)))
           }
           case RunnerStatus.FAILED => {
             failedJobs += edge
+            discountIfArrayJob(edge.function, jobArrayCountMap)
+            if (!isArrayJob(edge.function) || settings.countAllArrayJobs)
+              numConcurrentJobs -= 1
+
             messengers.foreach(_.exit(jobShortName(edge.function), edge.function.jobErrorLines.mkString("%n".format())))
           }
           case RunnerStatus.RUNNING => /* do nothing while still running */
@@ -516,6 +566,8 @@ class QGraph extends Logging {
         startedJobsToEmail &~= failedJobs
 
         addCleanup(doneJobs)
+
+        checkJobArrays()
 
         statusCounts.running -= doneJobs.size
         statusCounts.running -= failedJobs.size
@@ -547,6 +599,122 @@ class QGraph extends Logging {
         throw e
     } finally {
       emailStatus()
+    }
+  }
+
+  private def startJobs(readyJobs: Set[FunctionEdge]) = {
+    val edge = readyJobs.head
+    val startedJobs = if (!isArrayJob(edge.function)) {
+      edge.runner = newRunner(edge.function)
+
+      edge.init()
+      edge.start()
+      numConcurrentJobs += 1
+
+      Seq(edge)
+    } else {
+      val cmd = edge.function.asInstanceOf[CommandLineFunction]
+      val arrayJobs = getArrayJobs(readyJobs, cmd.jobArrayName)
+
+      startJobArray(arrayJobs, cmd.jobArrayName)
+
+      if (settings.countAllArrayJobs)
+        numConcurrentJobs += arrayJobs.size
+      else
+        numConcurrentJobs += 1
+
+      arrayJobs
+    }
+
+    startedJobs
+  }
+
+  private def isArrayJob(function: QFunction) = {
+    function match {
+      case cmd: CommandLineFunction =>
+        !settings.disableJobArrays && commandLineManager.supportsJobArrays && cmd.jobArrayName != null
+      case _ => false
+    }
+  }
+
+  private def countIfArrayJob(function: QFunction, countsMap: scala.collection.mutable.Map[String, Int]) {
+    function match {
+      case cmd: CommandLineFunction if (isArrayJob(cmd)) =>
+        countsMap(cmd.jobArrayName) += 1
+      case _ =>
+    }
+  }
+
+  private def discountIfArrayJob(function: QFunction, countsMap: scala.collection.mutable.Map[String, Int]) {
+    function match {
+      case cmd: CommandLineFunction if (isArrayJob(cmd)) =>
+        countsMap(cmd.jobArrayName) -= 1
+      case _ =>
+    }
+  }
+
+  private def getArrayJobs(edges: Set[FunctionEdge], jobArrayName: String) = {
+    edges.filter(_.function match {
+      case cmd: CommandLineFunction =>
+        cmd.jobArrayName != null && cmd.jobArrayName.equals(jobArrayName)
+      case _ => false
+    })
+  }
+ 
+  private def startJobArray(arrayJobs: Set[FunctionEdge], jobArrayName: String) {
+    val jobArray = new JobArrayFunction()
+    jobArray.jobName = "jobArray_" + jobArrayName
+    arrayJobs.head.function.copySettingsTo(jobArray)
+    jobArray.freeze()
+
+    val jobArrayEdge = new FunctionEdge(jobArray, null, null)
+    jobArrayEdge.resetToPending(true)
+    val jobArrayRunner = newRunner(jobArray)
+    jobArrayEdge.runner = jobArrayRunner
+    arrayJobs.foreach{edge =>
+      edge.runner = newRunner(edge.function)
+      edge.init()
+
+      val cmdRunner = edge.runner.asInstanceOf[CommandLineJobRunner]
+      jobArrayRunner.asInstanceOf[JobArrayRunner].add(cmdRunner)
+    }
+
+    jobArrayEdge.init()
+    jobArrayEdge.start()
+
+    // If the job array failed to start, explicitly mark all the array jobs as FAILED
+    if (jobArrayEdge.status == RunnerStatus.FAILED) {
+      jobArrayEdge.markAsFailed()
+      arrayJobs.foreach{edge =>
+        edge.markAsFailed()
+      }
+    }
+
+    jobArrayMap += jobArrayName -> jobArrayEdge
+  }
+
+  // Checks whther any of the job arrays has all its jobs finsih
+  private def checkJobArrays() {
+    if (jobArrayMap.size > 0) {
+      jobArrayMap.foreach{case (jobArrayName, jobArrayEdge) =>
+        val jobArrayCount = jobArrayCountMap.get(jobArrayName) match {
+          case Some(aCount) => aCount
+          case None => throw new QException("Can't find the job array count for jobArrayName " + jobArrayName)
+        }
+
+        if (jobArrayCount == 0) {
+          try {
+            jobArrayEdge.runner.cleanup()
+          } catch {
+            case _: Throwable => /* ignore errors in the done handler */
+          }
+
+          jobArrayMap -= jobArrayName
+          
+          if (!settings.countAllArrayJobs)
+            numConcurrentJobs -= 1
+        }
+      }
     }
   }
 
@@ -619,8 +787,12 @@ class QGraph extends Logging {
    */
   private def recheckDone(edge: FunctionEdge) {
     edge.status match {
-      case RunnerStatus.PENDING => statusCounts.pending += 1
-      case RunnerStatus.FAILED => statusCounts.failed += 1
+      case RunnerStatus.PENDING =>
+        statusCounts.pending += 1
+        countIfArrayJob(edge.function, jobArrayCountMap)
+      case RunnerStatus.FAILED =>
+        statusCounts.failed += 1
+        countIfArrayJob(edge.function, jobArrayCountMap)
       case RunnerStatus.DONE => statusCounts.done += 1
       case RunnerStatus.SKIPPED => statusCounts.done += 1
     }

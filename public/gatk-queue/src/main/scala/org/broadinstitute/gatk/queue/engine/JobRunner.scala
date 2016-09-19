@@ -33,7 +33,7 @@ import org.broadinstitute.gatk.queue.function.QFunction
 trait JobRunner[TFunction <: QFunction] {
 
   /**
-   * Initializes this job.
+   * Initializes this job runner.
    */
   def init() {
   }

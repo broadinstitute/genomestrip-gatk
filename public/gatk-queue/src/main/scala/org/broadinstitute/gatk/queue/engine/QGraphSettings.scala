@@ -49,6 +49,9 @@ class QGraphSettings {
   @Argument(fullName="qsub-broad", shortName="qsub-broad", doc="Equivalent to -qsub, but uses GridEngine parameters specific to the Broad GridEngine cluster", required=false)
   var qsubBroad = false
 
+  @Argument(fullName="disableJobArrays", shortName="disableJobArrays", doc="If jobRunner supports job arrays and disableJobArrays is false (default), a job array will be created for each group of functions in the graph taht have the same jobArrayName value", required=false)
+  var disableJobArrays: Boolean = false
+
   @Argument(fullName="status",shortName="status",doc="Get status of jobs for the qscript",required=false)
   var getStatus = false
 
@@ -87,6 +90,10 @@ class QGraphSettings {
   @ClassType(classOf[Int])
   @Argument(fullName="maximumNumberOfJobsToRunConcurrently", shortName="maxConcurrentRun", doc="The maximum number of jobs to start at any given time. (Default is no limit)", required=false)
   var maximumNumberOfConcurrentJobs: Option[Int] = None
+
+  @Advanced
+  @Argument(fullName="countAllArrayJobs", shortName="countAllArrayJobs", doc="If maximumNumberOfJobsToRunConcurrently is specified, controls whether to add the job array size or one to the count of running jobs", required=false)
+  var countAllArrayJobs: Boolean = false
 
   @ArgumentCollection
   val emailSettings = new EmailSettings

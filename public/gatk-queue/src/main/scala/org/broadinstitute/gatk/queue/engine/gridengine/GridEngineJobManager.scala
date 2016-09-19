@@ -25,9 +25,18 @@
 
 package org.broadinstitute.gatk.queue.engine.gridengine
 
-import org.broadinstitute.gatk.queue.function.CommandLineFunction
+import org.broadinstitute.gatk.queue.function.{JobArrayFunction, CommandLineFunction}
+import org.broadinstitute.gatk.queue.engine.JobArrayRunner
 import org.broadinstitute.gatk.queue.engine.drmaa.DrmaaJobManager
 
 class GridEngineJobManager extends DrmaaJobManager {
-  override def create(function: CommandLineFunction) = new GridEngineJobRunner(session, function)
+
+  override def supportsJobArrays = true
+
+  override def create(function: CommandLineFunction) = {
+    function match {
+      case jobArray: JobArrayFunction => new GridEngineJobRunner(session, jobArray) with JobArrayRunner
+      case _ => new GridEngineJobRunner(session, function)
+    }
+  }
 }

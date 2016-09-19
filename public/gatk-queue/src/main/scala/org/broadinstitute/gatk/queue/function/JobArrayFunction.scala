@@ -23,17 +23,13 @@
 * THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-package org.broadinstitute.gatk.queue.engine.uger
+package org.broadinstitute.gatk.queue.function
 
-import org.broadinstitute.gatk.queue.function.{JobArrayFunction, CommandLineFunction}
-import org.broadinstitute.gatk.queue.engine.JobArrayRunner
-import org.broadinstitute.gatk.queue.engine.gridengine.GridEngineJobManager
+import java.io.File
 
-class UgerJobManager extends GridEngineJobManager {
-  override def create(function: CommandLineFunction) = {
-     function match {
-      case jobArray: JobArrayFunction => new UgerJobRunner(session, jobArray) with JobArrayRunner
-      case _ => new UgerJobRunner(session, function)
-    }
-  }
+/**
+ * A function for running a job array
+ */
+class JobArrayFunction() extends CommandLineFunction {
+  override def commandLine = ""
 }
