@@ -28,10 +28,15 @@ package org.broadinstitute.gatk.queue.engine.drmaa
 import org.broadinstitute.gatk.queue.QException
 import org.broadinstitute.gatk.queue.TryLaterException
 import org.broadinstitute.gatk.queue.util.{Logging,Retry}
-import org.broadinstitute.gatk.queue.function.CommandLineFunction
-import org.broadinstitute.gatk.queue.engine.{RunnerStatus, CommandLineJobRunner}
+import org.broadinstitute.gatk.queue.function.{CommandLineFunction, JobArrayFunction}
+import org.broadinstitute.gatk.queue.engine.{RunnerStatus, CommandLineJobRunner, JobArrayRunner}
+import org.broadinstitute.gatk.utils.io.IOUtils
+
 import org.ggf.drmaa._
+import java.io.File
 import java.util.{Date, Collections}
+
+import scala.collection.JavaConverters._
 
 /**
  * Runs jobs using DRMAA.
@@ -85,7 +90,7 @@ class DrmaaJobRunner(val session: Session, val function: CommandLineFunction) ex
       try {
         Retry.attempt(() => {
           try {
-            jobId = session.runJob(drmaaJob)
+            jobId = runJob(drmaaJob)
           } catch {
             case _: org.ggf.drmaa.TryLaterException => throw new TryLaterException(1)
             case de: DrmaaException => throw new QException("Unable to submit job: " + de.getLocalizedMessage)
@@ -96,6 +101,18 @@ class DrmaaJobRunner(val session: Session, val function: CommandLineFunction) ex
         session.deleteJobTemplate(drmaaJob)
       }
       logger.info("Submitted job id: " + jobId)
+    }
+  }
+
+  def runJob(drmaaJob: JobTemplate) = {
+    this match {
+      case jobArrayRunner: JobArrayRunner =>
+        val arrayJobIds = session.runBulkJobs(drmaaJob, 1, jobArrayRunner.runners.size, 1).asScala.toList.asInstanceOf[List[String]]
+        val jobIdItr = arrayJobIds.iterator
+        jobArrayRunner.runners.foreach(runner =>
+          runner.asInstanceOf[DrmaaJobRunner].jobId = jobIdItr.next())
+	arrayJobIds.toString
+      case _ => session.runJob(drmaaJob)
     }
   }
 

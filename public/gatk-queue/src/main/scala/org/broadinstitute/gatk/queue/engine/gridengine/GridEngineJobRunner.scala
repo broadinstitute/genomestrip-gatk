@@ -27,6 +27,7 @@ package org.broadinstitute.gatk.queue.engine.gridengine
 
 import org.broadinstitute.gatk.queue.util.Logging
 import org.broadinstitute.gatk.queue.function.CommandLineFunction
+import org.broadinstitute.gatk.queue.engine.JobArrayRunner
 import org.broadinstitute.gatk.queue.engine.drmaa.DrmaaJobRunner
 import org.ggf.drmaa.Session
 
@@ -39,6 +40,16 @@ class GridEngineJobRunner(session: Session, function: CommandLineFunction) exten
   protected override val jobNameFilter = """[\s/:,@\\*?]"""
   protected override val minRunnerPriority = -1023
   protected override val maxRunnerPriority = 0
+
+  override def getJobScriptBody() = {
+    this match {
+      case jobArrayRunner: JobArrayRunner => 
+        "%s %s %s".format("head -${SGE_TASK_ID}", jobArrayRunner.scriptCallsFile.getPath, "| tail -1 | sh")
+
+      case _ =>
+        super.getJobScriptBody()
+    }
+  }
 
   override protected def functionNativeSpec = {
     // Force the remote environment to inherit local environment settings

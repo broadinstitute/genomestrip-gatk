@@ -23,24 +23,43 @@
 * THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-package org.broadinstitute.gatk.queue.engine.uger
+package org.broadinstitute.gatk.queue.engine
 
+import java.io.File
+
+import org.broadinstitute.gatk.queue.function.{QFunction, JobArrayFunction}
 import org.broadinstitute.gatk.queue.util.Logging
-import org.broadinstitute.gatk.queue.function.CommandLineFunction
-import org.broadinstitute.gatk.queue.engine.gridengine.GridEngineJobRunner
-import org.ggf.drmaa.Session
+import org.broadinstitute.gatk.utils.io.IOUtils
 
 /**
- * Runs jobs on a UGER compute cluster.
+ * Trait for job array runners.
  */
-class UgerJobRunner(session: Session, function: CommandLineFunction) extends GridEngineJobRunner(session, function) with Logging {
+trait JobArrayRunner extends Logging {
 
-  override protected def functionNativeSpec = {
-    // Force the UGER server defaults to be cleared
-    var nativeSpec: String = " -clear"
+  var runners = Seq.empty[CommandLineJobRunner]
 
-    (nativeSpec + " " + super.functionNativeSpec).trim()
+  // File containing the script invokations forr each of the jobs belonging to this job array
+  var scriptCallsFile: File = _
+
+  def add(runner: CommandLineJobRunner) {
+    runners :+= runner
   }
 
-  override protected def memoryLimitParameter = "h_vmem"
+  def createScriptCallsFile(tmpDir: File) = {
+    val scriptCalls = new StringBuilder
+    runners.foreach(runner => {
+      runner.jobScript.setExecutable(true)
+
+      val outputFile = runner.function.jobOutputFile
+      val errorFile = if (runner.function.jobErrorFile == null) outputFile else runner.function.jobErrorFile
+      scriptCalls.append("%s > %s 2>%s%n".format(runner.jobScript.getPath, outputFile.getPath, errorFile.getPath))
+    })
+    scriptCallsFile = IOUtils.writeTempFile(scriptCalls.toString(), ".array", "", tmpDir)
+    scriptCallsFile
+  }
+
+  def deleteScriptCallsFile() {
+    if (scriptCallsFile != null)
+      IOUtils.tryDelete(scriptCallsFile)
+  }
 }

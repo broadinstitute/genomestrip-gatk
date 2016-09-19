@@ -66,6 +66,27 @@ class FunctionEdge(val function: QFunction, val inputs: QNode, val outputs: QNod
       RunnerStatus.PENDING
   }
 
+  def init() {
+    try {
+      function.deleteLogs()
+      function.deleteOutputs()
+      function.mkOutputDirectories()
+
+      runner.init()
+    } catch {
+      case e: Throwable =>
+        currentStatus = RunnerStatus.FAILED
+        try {
+          runner.cleanup()
+          function.failOutputs.foreach(_.createNewFile())
+          writeStackTrace(e)
+        } catch {
+          case _: Throwable => /* ignore errors in the exception handler */
+        }
+        logger.error("Error: " + function.description, e)
+    }
+  }
+
   def start() {
     try {
       if (logger.isDebugEnabled) {
@@ -77,11 +98,6 @@ class FunctionEdge(val function: QFunction, val inputs: QNode, val outputs: QNod
       if (function.jobErrorFile != null)
         logger.info("Errors written to " + function.jobErrorFile)
 
-      function.deleteLogs()
-      function.deleteOutputs()
-      function.mkOutputDirectories()
-
-      runner.init()
       runner.start()
     } catch {
       case e: TryLaterException => {
@@ -90,7 +106,7 @@ class FunctionEdge(val function: QFunction, val inputs: QNode, val outputs: QNod
         } catch {
           case _: Throwable => /* ignore errors in the exception handler */
         }
-	throw e
+        throw e
       }
       case e: Throwable =>
         currentStatus = RunnerStatus.FAILED
@@ -155,6 +171,16 @@ class FunctionEdge(val function: QFunction, val inputs: QNode, val outputs: QNod
    */
   def markAsDone() {
     currentStatus = RunnerStatus.DONE
+  }
+
+  def markAsFailed() {
+    currentStatus = RunnerStatus.FAILED
+    try {
+      if (runner != null) runner.cleanup()
+      function.failOutputs.foreach(_.createNewFile())
+   } catch {
+      case _: Throwable => /* ignore errors in the exception handler */
+    }
   }
 
   /**

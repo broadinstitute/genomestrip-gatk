@@ -23,11 +23,17 @@
 * THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-package org.broadinstitute.gatk.queue.engine.gridengine
+package org.broadinstitute.gatk.queue.engine.uger
 
-import org.broadinstitute.gatk.queue.function.CommandLineFunction
-import org.broadinstitute.gatk.queue.engine.drmaa.DrmaaJobManager
+import org.broadinstitute.gatk.queue.function.{JobArrayFunction, CommandLineFunction}
+import org.broadinstitute.gatk.queue.engine.JobArrayRunner
+import org.broadinstitute.gatk.queue.engine.gridengine.GridEngineJobManager
 
-class UgerJobManager extends DrmaaJobManager {
-  override def create(function: CommandLineFunction) = new UgerJobRunner(session, function)
+class UgerJobManager extends GridEngineJobManager {
+  override def create(function: CommandLineFunction) = {
+     function match {
+      case jobArray: JobArrayFunction => new UgerJobRunner(session, jobArray) with JobArrayRunner
+      case _ => new UgerJobRunner(session, function)
+    }
+  }
 }

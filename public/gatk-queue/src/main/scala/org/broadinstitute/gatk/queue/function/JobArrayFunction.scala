@@ -23,15 +23,13 @@
 * THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-package org.broadinstitute.gatk.queue.engine
+package org.broadinstitute.gatk.queue.function
 
-import org.broadinstitute.gatk.queue.function.CommandLineFunction
+import java.io.File
 
 /**
- * Creates and stops CommandLineJobRunners
+ * A function for running a job array
  */
-trait CommandLineJobManager[TRunner <: CommandLineJobRunner] extends JobManager[CommandLineFunction, TRunner] {
-  def functionType = classOf[CommandLineFunction]
-
-  def supportsJobArrays = false
+class JobArrayFunction() extends CommandLineFunction {
+  override def commandLine = ""
 }
