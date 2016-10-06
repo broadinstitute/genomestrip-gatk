@@ -496,7 +496,7 @@ class QGraph extends Logging {
         var tryLater = false
 
         try {
-          while (canStartJobs && !tryLater) {
+          while (canStartJobs) {
             startJobs(readyJobs).foreach(edge => {
               messengers.foreach(_.started(jobShortName(edge.function)))
               startedJobs += edge
@@ -528,7 +528,7 @@ class QGraph extends Logging {
           startedJobsToEmail = Set.empty[FunctionEdge]
         }
 
-        if ((readyJobs.size == 0 || !canStartJobs) && runningJobs.size > 0) {
+        if (!canStartJobs && runningJobs.size > 0 || tryLater) {
           runningLock.synchronized {
             if (running) {
               val timeout = nextRunningCheck(lastRunningCheck)
