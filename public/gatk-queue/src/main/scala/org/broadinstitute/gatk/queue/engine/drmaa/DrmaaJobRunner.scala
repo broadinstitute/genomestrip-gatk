@@ -28,7 +28,7 @@ package org.broadinstitute.gatk.queue.engine.drmaa
 import org.broadinstitute.gatk.queue.QException
 import org.broadinstitute.gatk.queue.TryLaterException
 import org.broadinstitute.gatk.queue.util.{Logging,Retry}
-import org.broadinstitute.gatk.queue.function.{CommandLineFunction, JobArrayFunction}
+import org.broadinstitute.gatk.queue.function.{CommandLineFunction}
 import org.broadinstitute.gatk.queue.engine.{RunnerStatus, CommandLineJobRunner, JobArrayRunner}
 import org.broadinstitute.gatk.utils.io.IOUtils
 

@@ -68,8 +68,11 @@ class QGraph extends Logging {
   private var cleanupJobs = Set.empty[FunctionEdge]
 
   // A map of job array functions by jobArrayName
+  // This map is used to track jobArrayFunctions containing arayy jobs that have not yet completed
   private var jobArrayMap = Map.empty[String, FunctionEdge]
   // A map of job array function counts by jobArrayName
+  // This map counts the number of array jobss that have not yet completed
+  // The counts are incremented in recheckDone, and they are decremented in the main processing loop, when an array job completion is detected
   private var jobArrayCountMap = collection.mutable.Map[String, Int]().withDefaultValue(0)
 
   // Number of jobs being run by commandLineManager
@@ -292,14 +295,15 @@ class QGraph extends Logging {
     logger.debug("getReadyJobs start")
 
     // A map of ready job array function counts by jobArrayName
-    var readyJobCountMap = collection.mutable.Map[String, Int]().withDefaultValue(0)
+    // This map is populated in the filter step below
+    var readyJobArrayCountMap = collection.mutable.Map[String, Int]().withDefaultValue(0)
 
     val edges = jobGraph.edgeSet.filter(_ match {
       case edge: FunctionEdge =>
         val isReady = this.previousFunctions(edge).forall(_.status == RunnerStatus.DONE) && edge.status == RunnerStatus.PENDING
 
         if (isReady) {
-          countIfArrayJob(edge.function, readyJobCountMap)
+          countIfArrayJob(edge.function, readyJobArrayCountMap)
         }
         isReady
 
@@ -308,8 +312,8 @@ class QGraph extends Logging {
 
     // Contains jobArrayName(s) for which some but not all functions are ready
     var incompleteJobArrays = Set.empty[String]
-    if (readyJobCountMap.size > 0) {
-      readyJobCountMap.foreach{ case(jobArrayName, count) =>
+    if (readyJobArrayCountMap.size > 0) {
+      readyJobArrayCountMap.foreach{ case(jobArrayName, count) =>
         val jobArrayCount = jobArrayCountMap.get(jobArrayName) match {
           case Some(aCount) => aCount
           case None => throw new QException("Can't find the job array count for jobArrayName " + jobArrayName)
@@ -497,7 +501,7 @@ class QGraph extends Logging {
 
         try {
           while (canStartJobs) {
-            startJobs(readyJobs).foreach(edge => {
+            startOneJob(readyJobs).foreach(edge => {
               messengers.foreach(_.started(jobShortName(edge.function)))
               startedJobs += edge
               readyJobs -= edge
@@ -602,7 +606,9 @@ class QGraph extends Logging {
     }
   }
 
-  private def startJobs(readyJobs: Set[FunctionEdge]) = {
+  // If the first job in the set of readyJobs is a non-array job, the function will strat only this job and return.
+  // If the first job is an array job, the function will start it together with all the other jobs belonging to its job array and return
+  private def startOneJob(readyJobs: Set[FunctionEdge]) = {
     val edge = readyJobs.head
     val startedJobs = if (!isArrayJob(edge.function)) {
       edge.runner = newRunner(edge.function)
@@ -649,6 +655,9 @@ class QGraph extends Logging {
     function match {
       case cmd: CommandLineFunction if (isArrayJob(cmd)) =>
         countsMap(cmd.jobArrayName) -= 1
+        if (countsMap(cmd.jobArrayName) < 0) {
+          throw new QException("For " + cmd.jobArrayName + " the job array count is negative: " + countsMap(cmd.jobArrayName))
+        }
       case _ =>
     }
   }
@@ -693,7 +702,7 @@ class QGraph extends Logging {
     jobArrayMap += jobArrayName -> jobArrayEdge
   }
 
-  // Checks whther any of the job arrays has all its jobs finsih
+  // Checks whether any of the job arrays has all its jobs finish
   private def checkJobArrays() {
     if (jobArrayMap.size > 0) {
       jobArrayMap.foreach{case (jobArrayName, jobArrayEdge) =>

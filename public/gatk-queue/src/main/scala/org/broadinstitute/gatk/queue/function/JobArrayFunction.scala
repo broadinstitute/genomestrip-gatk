@@ -28,8 +28,9 @@ package org.broadinstitute.gatk.queue.function
 import java.io.File
 
 /**
- * A function for running a job array
+ * An internal function for running a job array.
+  This class is used as a marker so that JobManagers know to create an instance of JobArrayRunner
  */
-class JobArrayFunction() extends CommandLineFunction {
+private[queue] class JobArrayFunction() extends CommandLineFunction {
   override def commandLine = ""
 }
