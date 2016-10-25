@@ -27,7 +27,7 @@ package org.broadinstitute.gatk.queue.engine
 
 import java.io.File
 
-import org.broadinstitute.gatk.queue.function.{QFunction, JobArrayFunction}
+import org.broadinstitute.gatk.queue.function.{QFunction}
 import org.broadinstitute.gatk.queue.util.Logging
 import org.broadinstitute.gatk.utils.io.IOUtils
 
@@ -38,7 +38,9 @@ trait JobArrayRunner extends Logging {
 
   var runners = Seq.empty[CommandLineJobRunner]
 
-  // File containing the script invokations forr each of the jobs belonging to this job array
+  // For each command line, CommandLineJobRunner creates a job script file containing the command's invocation.
+  // scriptCallsFile contains the paths to these job sctipts, one line for each job in the array
+  // If there are {1..n} array jobs, the executing the i-th job consists in simply running the job script from the line i in this script calls file
   var scriptCallsFile: File = _
 
   def add(runner: CommandLineJobRunner) {
