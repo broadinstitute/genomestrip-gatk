@@ -23,11 +23,11 @@
 * THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-package org.broadinstitute.gatk.queue.engine.gridengine
+package org.broadinstitute.gatk.queue.engine.uger
 
 import org.broadinstitute.gatk.queue.util.Logging
 import org.broadinstitute.gatk.queue.function.CommandLineFunction
-import org.broadinstitute.gatk.queue.engine.drmaa.DrmaaJobRunner
+import org.broadinstitute.gatk.queue.engine.gridengine.GridEngineJobRunner
 import org.ggf.drmaa.Session
 
 /**
@@ -42,5 +42,5 @@ class UgerJobRunner(session: Session, function: CommandLineFunction) extends Gri
     (nativeSpec + " " + super.functionNativeSpec).trim()
   }
 
-  override protected def memoryLimitParameter = "m_mem_free"
+  override protected def memoryLimitParameter = "h_vmem"
 }
