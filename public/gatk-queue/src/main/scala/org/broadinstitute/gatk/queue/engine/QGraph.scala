@@ -638,7 +638,7 @@ class QGraph extends Logging {
   private def isArrayJob(function: QFunction) = {
     function match {
       case cmd: CommandLineFunction =>
-        !settings.disableJobArrays && commandLineManager.supportsJobArrays && cmd.jobArrayName != null
+        !this.dryRun && !settings.disableJobArrays && commandLineManager.supportsJobArrays && cmd.jobArrayName != null
       case _ => false
     }
   }
