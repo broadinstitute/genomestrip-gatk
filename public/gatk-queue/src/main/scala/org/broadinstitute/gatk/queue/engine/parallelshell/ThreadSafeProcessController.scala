@@ -45,23 +45,7 @@ class ThreadSafeProcessController extends Logging {
    * @param processSettings specifiying which files to write to
    * @return a process logger which can be used by the `scala.sys.process`
    */
-  private def getProcessLogger(processSettings: ProcessSettings): ProcessLogger = {
-
-    val (stdOutFile, stdErrFile) = {
-
-      val stdOutFile = processSettings.getStdoutSettings.getOutputFile
-
-      if(processSettings.getStderrSettings.getOutputFile != null) {
-        val stdErrFile = processSettings.getStderrSettings.getOutputFile
-        (stdOutFile, stdErrFile)
-      } else {
-        (stdOutFile, stdOutFile)
-      }
-
-    }
-
-    val stdOutPrintWriter = new PrintWriter(stdOutFile)
-    val stdErrPrintWriter = new PrintWriter(stdErrFile)
+  private def getProcessLogger(stdOutPrintWriter: PrintWriter, stdErrPrintWriter: PrintWriter): ProcessLogger = {
 
     def printToWriter(printWriter: PrintWriter)(line: String): Unit = {
       printWriter.println(line)
@@ -87,10 +71,19 @@ class ThreadSafeProcessController extends Logging {
   def exec(processSettings: ProcessSettings): Int = {
 
     val commandLine: ProcessBuilder = processSettings.getCommand.mkString(" ")
-    logger.debug("Trying to start process: " + commandLine)
-    process = Some(commandLine.run(getProcessLogger(processSettings)))
-    process.get.exitValue()
 
+    val stdOutPrintWriter = new PrintWriter(processSettings.getStdoutSettings.getOutputFile)
+    val stdErrPrintWriter = if (processSettings.getStderrSettings.getOutputFile == null) stdOutPrintWriter else new PrintWriter(processSettings.getStderrSettings.getOutputFile)
+
+    logger.debug("Trying to start process: " + commandLine)
+    process = Some(commandLine.run(getProcessLogger(stdOutPrintWriter, stdErrPrintWriter)))
+
+    stdOutPrintWriter.close
+    if (stdErrPrintWriter != stdOutPrintWriter) {
+      stdErrPrintWriter.close
+    }
+
+    process.get.exitValue()
   }
 
   /**

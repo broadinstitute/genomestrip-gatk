@@ -92,6 +92,11 @@ class QGraphSettings {
   var maximumNumberOfConcurrentJobs: Option[Int] = None
 
   @Advanced
+  @ClassType(classOf[Double])
+  @Argument(fullName="availableProcessorsMultiplier", shortName="availableProcessorsMultiplier", doc="When jobRunner=ParallelShell, this value can be used as a multiplier to change the thread pool size that defaults to the number of availableProcessors (Default is 1)", required=false)
+  var availableProcessorsMultiplier: Option[Double] = None
+
+  @Advanced
   @Argument(fullName="countAllArrayJobs", shortName="countAllArrayJobs", doc="If maximumNumberOfJobsToRunConcurrently is specified, controls whether to add the job array size or one to the count of running jobs", required=false)
   var countAllArrayJobs: Boolean = false
 
