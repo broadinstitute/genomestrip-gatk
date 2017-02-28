@@ -625,7 +625,7 @@ class QGraph extends Logging {
       case (None, Some(y)) => Some(y)
       case _ => None
     }
-logger.info("maxNumThreads:" + maxNumThreads.get)
+
     if (maxNumThreads.isDefined) {
       System.setProperty("scala.concurrent.context.maxThreads", maxNumThreads.get.toString)
     }
