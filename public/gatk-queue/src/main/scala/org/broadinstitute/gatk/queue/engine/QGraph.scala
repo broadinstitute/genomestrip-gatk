@@ -614,10 +614,14 @@ class QGraph extends Logging {
     var numThreads: Option[Int] = None
     if (settings.availableProcessorsMultiplier.isDefined) {
       if (settings.availableProcessorsMultiplier.get <= 0) {
-        throw new QException("The argument settings.availableProcessorsMultip must be a positive double value")
+        throw new QException("The argument availableProcessorsMultip must be a positive double value")
       }
-      numThreads = Some((math rint Runtime.getRuntime.availableProcessors * settings.availableProcessorsMultiplier.get).toInt)
-      System.setProperty("scala.concurrent.context.numThreads", numThreads.get.toString)
+      var processorsToUse = (math rint Runtime.getRuntime.availableProcessors * settings.availableProcessorsMultiplier.get).toInt
+      if (processorsToUse == 0) {
+        processorsToUse = 1
+      }
+      numThreads = Some(processorsToUse)
+      System.setProperty("scala.concurrent.context.numThreads", processorsToUse.toString)
     }
     val maxNumThreads = (settings.maximumNumberOfConcurrentJobs, numThreads) match {
       case (Some(x), Some(y)) => Some(math.min(x, y))
