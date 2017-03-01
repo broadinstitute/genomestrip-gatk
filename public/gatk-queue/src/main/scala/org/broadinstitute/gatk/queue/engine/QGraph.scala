@@ -623,7 +623,7 @@ class QGraph extends Logging {
       case (Some(x), Some(y)) =>
         math.max(1, math.min(x, y))
       case (Some(x), None) =>
-        math.min(availableProcessors, math.max(1, x))
+        math.max(1, x)
       case (None, Some(y)) =>
         math.max(1, y)
       case _ =>
