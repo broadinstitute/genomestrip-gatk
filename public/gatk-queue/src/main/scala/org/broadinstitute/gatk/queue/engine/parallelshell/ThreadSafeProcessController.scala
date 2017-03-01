@@ -77,13 +77,14 @@ class ThreadSafeProcessController extends Logging {
 
     logger.debug("Trying to start process: " + commandLine)
     process = Some(commandLine.run(getProcessLogger(stdOutPrintWriter, stdErrPrintWriter)))
+    val exitValue = process.get.exitValue()
 
     stdOutPrintWriter.close
     if (stdErrPrintWriter != stdOutPrintWriter) {
       stdErrPrintWriter.close
     }
 
-    process.get.exitValue()
+    exitValue
   }
 
   /**
