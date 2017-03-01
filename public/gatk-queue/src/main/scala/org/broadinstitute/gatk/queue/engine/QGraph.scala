@@ -611,28 +611,28 @@ class QGraph extends Logging {
 
   // Sets up parametrs to configure the number and max number of threads in the global static thread pool
   private def configureParallelShellConcurrency = {
-    var numThreads: Option[Int] = None
+    val availableProcessors = Runtime.getRuntime.availableProcessors
+    var requestedProcessors: Option[Int] = None
     if (settings.availableProcessorsMultiplier.isDefined) {
       if (settings.availableProcessorsMultiplier.get <= 0) {
-        throw new QException("The argument availableProcessorsMultip must be a positive double value")
+        throw new QException("The argument availableProcessorsMultiplier must be a positive double value")
       }
-      var processorsToUse = (math rint Runtime.getRuntime.availableProcessors * settings.availableProcessorsMultiplier.get).toInt
-      if (processorsToUse == 0) {
-        processorsToUse = 1
-      }
-      numThreads = Some(processorsToUse)
-      System.setProperty("scala.concurrent.context.numThreads", processorsToUse.toString)
+      requestedProcessors = Some((math rint availableProcessors * settings.availableProcessorsMultiplier.get).toInt)
     }
-    val maxNumThreads = (settings.maximumNumberOfConcurrentJobs, numThreads) match {
-      case (Some(x), Some(y)) => Some(math.min(x, y))
-      case (Some(x), None) => Some(x)
-      case (None, Some(y)) => Some(y)
-      case _ => None
+    val numThreads = (settings.maximumNumberOfConcurrentJobs, requestedProcessors) match {
+      case (Some(x), Some(y)) =>
+        math.max(1, math.min(x, y))
+      case (Some(x), None) =>
+        math.min(availableProcessors, math.max(1, x))
+      case (None, Some(y)) =>
+        math.max(1, y)
+      case _ =>
+        availableProcessors
     }
 
-    if (maxNumThreads.isDefined) {
-      System.setProperty("scala.concurrent.context.maxThreads", maxNumThreads.get.toString)
-    }
+    System.setProperty("scala.concurrent.context.minThreads", numThreads.toString)
+    System.setProperty("scala.concurrent.context.numThreads", numThreads.toString)
+    System.setProperty("scala.concurrent.context.maxThreads", numThreads.toString)
   }
 
   // If the first job in the set of readyJobs is a non-array job, the function will strat only this job and return.
