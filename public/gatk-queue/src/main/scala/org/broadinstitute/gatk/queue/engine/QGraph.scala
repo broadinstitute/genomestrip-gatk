@@ -457,6 +457,9 @@ class QGraph extends Logging {
       else if (settings.jobRunner == null) {
         settings.jobRunner = "Shell"
       }
+      if (settings.jobRunner == "ParallelShell") {
+        configureParallelShellConcurrency
+      }
       commandLineManager = commandLinePluginManager.createByName(settings.jobRunner)
 
       for (mgr <- managers) {
@@ -604,6 +607,32 @@ class QGraph extends Logging {
     } finally {
       emailStatus()
     }
+  }
+
+  // Sets up parametrs to configure the number and max number of threads in the global static thread pool
+  private def configureParallelShellConcurrency = {
+    val availableProcessors = Runtime.getRuntime.availableProcessors
+    var requestedProcessors: Option[Int] = None
+    if (settings.availableProcessorsMultiplier.isDefined) {
+      if (settings.availableProcessorsMultiplier.get <= 0) {
+        throw new QException("The argument availableProcessorsMultiplier must be a positive double value")
+      }
+      requestedProcessors = Some((math rint availableProcessors * settings.availableProcessorsMultiplier.get).toInt)
+    }
+    val numThreads = (settings.maximumNumberOfConcurrentJobs, requestedProcessors) match {
+      case (Some(x), Some(y)) =>
+        math.max(1, math.min(x, y))
+      case (Some(x), None) =>
+        math.max(1, x)
+      case (None, Some(y)) =>
+        math.max(1, y)
+      case _ =>
+        availableProcessors
+    }
+
+    System.setProperty("scala.concurrent.context.minThreads", numThreads.toString)
+    System.setProperty("scala.concurrent.context.numThreads", numThreads.toString)
+    System.setProperty("scala.concurrent.context.maxThreads", numThreads.toString)
   }
 
   // If the first job in the set of readyJobs is a non-array job, the function will strat only this job and return.
