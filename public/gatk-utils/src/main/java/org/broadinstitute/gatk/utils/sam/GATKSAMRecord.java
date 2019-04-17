@@ -120,8 +120,6 @@ public class GATKSAMRecord extends SAMRecord implements Cloneable {
         super.setCigarString(read.getCigarString());
         super.setReadBases(read.getReadBases());
         super.setBaseQualities(read.getBaseQualities());
-        // From SAMRecord constructor: Do this after the above because setCigarString will clear it.
-        GATKBin.setReadIndexingBin(this, GATKBin.getReadIndexingBin(read));
     }
 
     public static GATKSAMRecord createRandomRead(int length) {
@@ -538,8 +536,6 @@ public class GATKSAMRecord extends SAMRecord implements Cloneable {
             GATKSAMReadGroupRecord rg = new GATKSAMReadGroupRecord(samRG);
             emptyRead.setReadGroup(rg);
         }
-
-        GATKBin.setReadIndexingBin(emptyRead, 0);
 
         return emptyRead;
     }
