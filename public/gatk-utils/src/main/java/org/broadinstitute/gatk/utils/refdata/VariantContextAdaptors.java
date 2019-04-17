@@ -28,7 +28,6 @@ package org.broadinstitute.gatk.utils.refdata;
 import htsjdk.samtools.util.SequenceUtil;
 import htsjdk.tribble.Feature;
 import htsjdk.tribble.annotation.Strand;
-import htsjdk.tribble.gelitext.GeliTextFeature;
 import org.broadinstitute.gatk.utils.contexts.ReferenceContext;
 import org.broadinstitute.gatk.utils.GenomeLoc;
 import org.broadinstitute.gatk.utils.classloader.PluginManager;
@@ -116,60 +115,6 @@ public class VariantContextAdaptors {
     // GELI to VariantContext
     //
     // --------------------------------------------------------------------------------------------------------------
-
-    private static class GeliTextAdaptor implements VCAdaptor {
-        /**
-         * Converts Geli text records to VariantContext. 
-         * @return GeliTextFeature.
-         */
-        @Override
-        public Class<? extends Feature> getAdaptableFeatureType() { return GeliTextFeature.class; }
-
-        /**
-         * convert to a Variant Context, given:
-         * @param name  the name of the ROD
-         * @param input the Rod object, in this case a RodGeliText
-         * @param ref   the reference context
-         * @return a VariantContext object
-         */
-        @Override
-        public VariantContext convert(String name, Object input, ReferenceContext ref) {
-            GeliTextFeature geli = (GeliTextFeature)input;
-            if ( ! Allele.acceptableAlleleBases(String.valueOf(geli.getRefBase())) )
-                return null;
-            Allele refAllele = Allele.create(String.valueOf(geli.getRefBase()), true);
-
-            // make sure we can convert it
-            if ( geli.getGenotype().isHet() || !geli.getGenotype().containsBase(geli.getRefBase())) {
-                // add the reference allele
-                List<Allele> alleles = new ArrayList<Allele>();
-                List<Allele> genotypeAlleles = new ArrayList<Allele>();
-                // add all of the alt alleles
-                for ( char alt : geli.getGenotype().toString().toCharArray() ) {
-                    if ( ! Allele.acceptableAlleleBases(String.valueOf(alt)) ) {
-                        return null;
-                    }
-                    Allele allele = Allele.create(String.valueOf(alt), false);
-                    if (!alleles.contains(allele) && !refAllele.basesMatch(allele.getBases())) alleles.add(allele);
-
-                    // add the allele, first checking if it's reference or not
-                    if (!refAllele.basesMatch(allele.getBases())) genotypeAlleles.add(allele);
-                    else genotypeAlleles.add(refAllele);
-                }
-
-                Map<String, Object> attributes = new HashMap<String, Object>();
-                Collection<Genotype> genotypes = new ArrayList<Genotype>();
-                Genotype call = GenotypeBuilder.create(name, genotypeAlleles);
-
-                // add the call to the genotype list, and then use this list to create a VariantContext
-                genotypes.add(call);
-                alleles.add(refAllele);
-                GenomeLoc loc = ref.getGenomeLocParser().createGenomeLoc(geli.getChr(),geli.getStart());
-                return new VariantContextBuilder(name, loc.getContig(), loc.getStart(), loc.getStop(), alleles).genotypes(genotypes).log10PError(-1 * geli.getLODBestToReference()).attributes(attributes).make();
-            } else
-                return null; // can't handle anything else
-        }
-    }
 
     // --------------------------------------------------------------------------------------------------------------
     //

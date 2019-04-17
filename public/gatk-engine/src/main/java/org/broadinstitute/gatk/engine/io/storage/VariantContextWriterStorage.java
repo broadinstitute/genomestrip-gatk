@@ -190,6 +190,11 @@ public class VariantContextWriterStorage implements Storage<VariantContextWriter
         }
 
         @Override
+        public void setHeader(VCFHeader header) {
+            for ( final VariantContextWriter writer : writers ) writer.setHeader(header);
+        }
+
+        @Override
         public void close() {
             for ( final VariantContextWriter writer : writers ) writer.close();
         }
@@ -220,6 +225,11 @@ public class VariantContextWriterStorage implements Storage<VariantContextWriter
      */
     public void writeHeader(VCFHeader header) {
         writer.writeHeader(header);
+    }
+
+    @Override
+    public void setHeader(VCFHeader header) {
+        writer.setHeader(header);
     }
 
     /**

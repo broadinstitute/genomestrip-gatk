@@ -266,6 +266,11 @@ public class VariantContextWriterStub implements Stub<VariantContextWriter>, Var
         outputTracker.getStorage(this).writeHeader(vcfHeader);
     }
 
+    @Override
+    public void setHeader(VCFHeader header) {
+        outputTracker.getStorage(this).setHeader(header);
+    }
+
     /**
      * @{inheritDoc}
      */
