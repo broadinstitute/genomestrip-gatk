@@ -138,8 +138,7 @@ public class GATKBin implements Comparable<GATKBin> {
         return read.computeIndexingBin();
     }
     public static void setReadIndexingBin(final SAMRecord read, final Integer indexingBin) {
-        // SAMRecord.java in htsjdk 2.19.0 does not contain the method setIndexingBin
-        //read.setIndexingBin(indexingBin);
+        throw new RuntimeException("SAMRecord no longer implements the method setIndexingBin(indexingBin)");
     }
     public static SAMBinaryTagAndValue getReadBinaryAttributes(final SAMRecord read) {
         return read.getBinaryAttributes();
